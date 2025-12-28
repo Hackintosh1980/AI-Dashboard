@@ -1,0 +1,26 @@
+{
+  "name": "SPS ADV Profile",
+  "vendor": "Inkbird",
+  "model": "SPS",
+
+  "company_id": 25,
+  "mac_len": 0,
+  "skip_after_mac": 0,
+
+  "endian": "le",
+
+  "scale_temperature": 235.0,
+  "scale_humidity": 1.0,
+
+  "H_i_bytes": 1,
+
+  "fields": {
+    "T_i": 0,
+    "H_i": 4,
+
+    "T_e": 100,
+    "H_e": 100,
+
+    "packet": 6
+  }
+}

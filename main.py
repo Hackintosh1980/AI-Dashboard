@@ -1,0 +1,97 @@
+# main.py – EINZIG gültiger Startpunkt (basierend auf main_ui + core)
+
+import os
+import sys
+from kivy.app import App
+from kivy.core.window import Window
+from kivy.core.text import LabelBase
+from kivy.uix.screenmanager import ScreenManager, FadeTransition
+from kivy.core.window import Window
+from kivy.metrics import dp, sp
+
+# -------------------------------------------------------
+# Screens & Logik-Module
+# -------------------------------------------------------
+from dashboard_gui.dashboard import DashboardScreen
+from dashboard_gui.setup_screen import SetupScreen
+from dashboard_gui.debug_screen import DebugScreen
+from dashboard_gui.data_buffer import BUFFER
+from dashboard_gui.ui.fullscreen_content.fullscreen_view import FullScreenView
+from dashboard_gui.ui.scaling_utils import UI_SCALE
+from dashboard_gui.ui.common.device_picker import DevicePickerScreen
+from dashboard_gui.debug_filemanager import DebugFileManagerScreen
+from dashboard_gui.ui.csv_viewer_content.csv_viewer_screen import CSVViewerScreen
+from dashboard_gui.settings_screen import SettingsScreen
+from dashboard_gui.ui.cam_viewer_content.cam_viewer_screen import CamViewerScreen
+from dashboard_gui.about_screen import AboutScreen
+from dashboard_gui.ui.vpd_scatter_screen_content.vpd_scatter_screen import VPDScatterScreen
+
+import core
+
+# -------------------------------------------------------
+# FontAwesome sicher laden
+# -------------------------------------------------------
+FONT_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "dashboard_gui", "assets", "fonts", "fa-solid-900.ttf"
+)
+
+if os.path.exists(FONT_PATH):
+    LabelBase.register(name="FA", fn_regular=FONT_PATH)
+else:
+    print("⚠️ Font fehlt:", FONT_PATH)
+
+
+# -------------------------------------------------------
+# Buffer vor UI initialisieren
+# -------------------------------------------------------
+def init_buffer():
+    BUFFER.load()
+    if not BUFFER.data or not isinstance(BUFFER.data, list):
+        BUFFER.data = []
+    BUFFER.file_exists = True
+    BUFFER.data_ok = True
+    BUFFER.alive_flag = True
+
+
+# -------------------------------------------------------
+# Haupt-App (UI + Core)
+# -------------------------------------------------------
+class DashboardApp(App):
+
+    def build(self):
+        init_buffer()
+
+        sm = ScreenManager(transition=FadeTransition())
+        sm.add_widget(DashboardScreen(name="dashboard"))
+        sm.add_widget(SetupScreen(name="setup"))
+        sm.add_widget(DebugScreen(name="debug"))
+        sm.add_widget(FullScreenView(name="fullscreen"))
+        sm.add_widget(DevicePickerScreen(name="device_picker"))
+        sm.add_widget(DebugFileManagerScreen(name="filemanager"))
+        sm.add_widget(CSVViewerScreen(name="csv_viewer"))
+        sm.add_widget(SettingsScreen(name="settings"))
+        sm.add_widget(CamViewerScreen(name="cam_viewer"))
+        sm.add_widget(AboutScreen(name="about"))
+        sm.add_widget(VPDScatterScreen(name="vpd_scatter"))
+
+        return sm
+
+    # Core starten nach UI-Init
+    def on_start(self):
+        core.start()
+
+    # Core sauber stoppen
+    def on_stop(self):
+        core.stop()
+
+
+# -------------------------------------------------------
+# Offizieller Einstiegspunkt
+# -------------------------------------------------------
+def main():
+    DashboardApp().run()
+
+
+if __name__ == "__main__":
+    main()

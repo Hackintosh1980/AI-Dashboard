@@ -1,0 +1,158 @@
+# dashboard_gui/ui/cam_viewer_content/cam_viewer_panel.py
+
+import os, json, subprocess, threading, shutil
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+from kivy.uix.scrollview import ScrollView
+from kivy.utils import platform
+
+from dashboard_gui.ui.scaling_utils import dp_scaled, sp_scaled
+from dashboard_gui.ui.cam_viewer_content.cam_player_widget import CamPlayerWidget
+
+DEFAULT_RTSP_PORT = 554
+DEFAULT_LIVE_PATH = "stream1"
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(_ROOT)), "data")
+CAM_CFG = os.path.join(DATA_DIR, "cam_config.json")
+
+
+def _which(x): return shutil.which(x)
+def build_rtsp_url(ip,u,p,path): return f"rtsp://{u}:{p}@{ip}:{DEFAULT_RTSP_PORT}/{path}"
+
+
+class CamViewerPanel(BoxLayout):
+
+    def __init__(self, **kw):
+        super().__init__(orientation="vertical", **kw)
+
+        # Player Widget
+        self.player = CamPlayerWidget(size_hint_y=0.40)
+        self.add_widget(self.player)
+
+        # Load Config
+        cfg = self._load()
+
+        # ------- FORM -------
+        form = BoxLayout(orientation="vertical",
+                         size_hint_y=None,
+                         height=dp_scaled(150),
+                         spacing=dp_scaled(8))
+
+        def make_row(label, default):
+            row = BoxLayout(size_hint_y=None, height=dp_scaled(40), spacing=dp_scaled(8))
+            row.add_widget(Label(text=label, size_hint=(0.3,1), font_size=sp_scaled(16)))
+            field = TextInput(text=default, multiline=False, font_size=sp_scaled(16))
+            row.add_widget(field)
+            return row, field
+
+        r1, self.inp_ip = make_row("Camera IP", cfg.get("ip",""))
+        r2, self.inp_user = make_row("Username", cfg.get("user",""))
+        r3, self.inp_pwd = make_row("Password", cfg.get("pwd","")); self.inp_pwd.password=True
+
+        form.add_widget(r1); form.add_widget(r2); form.add_widget(r3)
+        self.add_widget(form)
+
+        # ------- BUTTONS -------
+        btns = BoxLayout(size_hint_y=None, height=dp_scaled(50), spacing=dp_scaled(8))
+
+        b_start = Button(text="▶ Start Live",
+                         background_color=(0.2,0.6,0.2,1),
+                         font_size=sp_scaled(18))
+        b_start.bind(on_release=lambda *_: self.start())
+
+        b_stop = Button(text="■ Stop",
+                        background_color=(0.6,0.2,0.2,1),
+                        font_size=sp_scaled(18))
+        b_stop.bind(on_release=lambda *_: self.stop())
+
+        btns.add_widget(b_start)
+        btns.add_widget(b_stop)
+        self.add_widget(btns)
+
+        # ------- LOG -------
+        self.log = Label(text="RTSP idle.",
+                         valign="top", halign="left",
+                         size_hint_y=1, font_size=sp_scaled(14))
+        self.log.bind(size=lambda *_: setattr(self.log, "text_size", self.log.size))
+
+        scroll = ScrollView(size_hint=(1,1))
+        scroll.add_widget(self.log)
+        self.add_widget(scroll)
+
+        self.proc = None
+
+    # -----------------------------------------------------
+
+    def _load(self):
+        os.makedirs(DATA_DIR, exist_ok=True)
+        if not os.path.exists(CAM_CFG):
+            return {}
+        try:
+            return json.load(open(CAM_CFG))
+        except:
+            return {}
+
+    def _save(self):
+        os.makedirs(DATA_DIR, exist_ok=True)
+        json.dump({
+            "ip": self.inp_ip.text.strip(),
+            "user": self.inp_user.text.strip(),
+            "pwd": self.inp_pwd.text.strip(),
+        }, open(CAM_CFG,"w"), indent=2)
+
+    # -----------------------------------------------------
+
+    def _log(self, msg):
+        self.log.text += "\n" + msg
+
+    def start(self):
+        self._save()
+
+        ip = self.inp_ip.text.strip()
+        u  = self.inp_user.text.strip()
+        p  = self.inp_pwd.text.strip()
+
+        if not ip or not u or not p:
+            self._log("❌ IP/User/Pass fehlen.")
+            return
+
+        url = build_rtsp_url(ip,u,p,DEFAULT_LIVE_PATH)
+        self.player.show_starting(url)
+
+        if platform == "android":
+            self._log("📱 Android: kein interner RTSP Player.\nNur Platzhalter.")
+            return
+
+        # Desktop → ffplay
+        ff = _which("ffplay")
+        if not ff:
+            self._log("❌ ffplay nicht gefunden.")
+            return
+
+        self._log(f"▶ ffplay: {url}")
+        try:
+            self.proc = subprocess.Popen([ff, "-rtsp_transport","tcp", url],
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT,
+                                         text=True)
+            threading.Thread(target=self._pump, daemon=True).start()
+        except Exception as e:
+            self._log(f"❌ Fehler: {e}")
+
+    def stop(self):
+        if self.proc:
+            self._log("■ Stoppe ffplay…")
+            try: self.proc.terminate()
+            except: pass
+            self.proc = None
+        self.player.show_stopped()
+
+    def _pump(self):
+        try:
+            for line in self.proc.stdout:
+                self._log(line.strip())
+        except:
+            pass

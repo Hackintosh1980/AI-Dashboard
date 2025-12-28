@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import json
+
+from kivy.utils import platform
+
+if platform == "android":
+    from jnius import autoclass
+    PythonActivity = autoclass("org.kivy.android.PythonActivity")
+    ctx = PythonActivity.mActivity
+    DATA = os.path.join(ctx.getFilesDir().getAbsolutePath(), "app", "data")
+else:
+    BASE = os.path.dirname(os.path.abspath(__file__))
+    DATA = os.path.join(BASE, "data")
+
+CONFIG_PATH = os.path.join(DATA, "config.json")
+
+DEFAULTS = {
+    "devices": {},
+    "bridge_profiles": {},     # NEU – aber unsichtbar nach außen
+    "refresh_interval": 2.0,
+    "stale_timeout": 15.0,
+    "ui_refresh_interval": 1.0,
+    "temperature_unit": "C",
+    "temperature_offset": 0.0,
+    "humidity_offset": 0.0,
+    "leaf_offset": 0.0
+}
+
+_config = None
+
+
+def _init():
+    global _config
+
+    if _config is not None:
+        return _config
+
+    os.makedirs(DATA, exist_ok=True)
+
+    if not os.path.exists(CONFIG_PATH):
+        _config = dict(DEFAULTS)
+        save(_config)
+        return _config
+
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            data = dict(DEFAULTS)
+    except:
+        data = dict(DEFAULTS)
+
+    for k, v in DEFAULTS.items():
+        data.setdefault(k, v)
+
+    _config = data
+    return _config
+
+
+def save(cfg):
+    global _config
+    _config = cfg
+
+    tmp = CONFIG_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, CONFIG_PATH)
+
+
+def get_devices():
+    cfg = _init()
+    devs = cfg.get("devices", {})
+    return list(devs.keys()) if isinstance(devs, dict) else []
+
+
+def get_device_profile(mac):
+    d = _init().get("devices", {}).get(mac)
+    if not d:
+        return "unknown"
+    return d.get("profile", "unknown")
+
+
+def set_device_profile(mac, profile):
+    cfg = _init()
+    devs = cfg["devices"]
+    if mac not in devs:
+        devs[mac] = {}
+    devs[mac]["profile"] = profile
+    save(cfg)
+
+
+def set_devices_full(dev_dict):
+    cfg = _init()
+    cfg["devices"] = dev_dict
+    save(cfg)
+
+
+def get_refresh_interval():
+    return float(_init().get("refresh_interval"))
+
+
+def get_stale_timeout():
+    return float(_init().get("stale_timeout"))
+
+
+def get_ui_refresh_interval():
+    return float(_init().get("ui_refresh_interval"))
+
+
+def get_temperature_unit():
+    return _init().get("temperature_unit", "C").upper()
+
+
+def get_temperature_offset():
+    return float(_init().get("temperature_offset"))
+
+
+def get_humidity_offset():
+    return float(_init().get("humidity_offset"))
+
+
+def get_leaf_offset():
+    return float(_init().get("leaf_offset"))
+
+def reload():
+    global _config
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        _config = json.load(f)
+    print("[config] reload OK")
+
+def get_bridge_profiles():
+    return _init().get("bridge_profiles", {})
+
+def set_bridge_profile(mac, profile):
+    cfg = _init()
+    bp = cfg.get("bridge_profiles", {})
+    bp[mac] = profile
+    cfg["bridge_profiles"] = bp
+    save(cfg)
+def get_adv_decoder(mac):
+    cfg = _init()
+    return cfg.get("devices", {}).get(mac, {}).get("adv_decoder", "")
+
+def get_gatt_decoder(mac):
+    cfg = _init()
+    return cfg.get("devices", {}).get(mac, {}).get("gatt_decoder", "")
+
+def get_bridge_profile(mac):
+    cfg = _init()
+    return cfg.get("devices", {}).get(mac, {}).get("bridge_profile", "")
+
+def get_device_name(mac):
+    cfg = _init()
+    return cfg.get("devices", {}).get(mac, {}).get("name", "")
+
+
+def set_device_name(mac, name):
+    cfg = _init()
+    devs = cfg.get("devices", {})
+    if mac not in devs:
+        devs[mac] = {}
+    devs[mac]["name"] = name
+    save(cfg)
+

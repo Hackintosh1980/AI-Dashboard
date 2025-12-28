@@ -1,0 +1,97 @@
+[
+  {
+    "timestamp": "2025-12-28T15:11:43.454+0000",
+    "device_id": "FABCEA8B-7EC8-2594-4879-2B3B63989660",
+    "name": "ThermoBeacon2",
+    "adv": {
+      "alive": true,
+      "status": "active",
+      "packet_counter": null,
+      "raw": "190019060000F1F0780B5D018D036801BE0342BA0E00",
+      "internal": {
+        "temperature": {
+          "value": 21.8125,
+          "unit": "\u00b0C"
+        },
+        "humidity": {
+          "value": 56.8125,
+          "unit": "%"
+        }
+      },
+      "external": {
+        "present": true,
+        "temperature": {
+          "value": 22.5,
+          "unit": "\u00b0C"
+        },
+        "humidity": {
+          "value": 59.875,
+          "unit": "%"
+        }
+      },
+      "vpd_internal": {
+        "value": 1.129,
+        "unit": "kPa"
+      },
+      "vpd_external": {
+        "value": 1.094,
+        "unit": "kPa"
+      }
+    },
+    "gatt": {
+      "alive": false,
+      "status": "offline",
+      "packet_counter": null,
+      "raw": null,
+      "internal": {
+        "temperature": {
+          "value": null,
+          "unit": "\u00b0C"
+        },
+        "humidity": {
+          "value": null,
+          "unit": "%"
+        }
+      },
+      "external": {
+        "present": false,
+        "temperature": {
+          "value": null,
+          "unit": "\u00b0C"
+        },
+        "humidity": {
+          "value": null,
+          "unit": "%"
+        }
+      },
+      "vpd_internal": {
+        "value": null,
+        "unit": "kPa"
+      },
+      "vpd_external": {
+        "value": null,
+        "unit": "kPa"
+      }
+    },
+    "bridge_alive": true,
+    "bridge_status": "OK",
+    "bridge_last_seen": 0.0,
+    "alive": true,
+    "status": "active",
+    "health": {
+      "uptime": {
+        "value": 791.2251739501953,
+        "unit": "s"
+      },
+      "battery": {
+        "value": null,
+        "unit": "%",
+        "voltage": null
+      },
+      "signal": {
+        "rssi": -69,
+        "quality": null
+      }
+    }
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "devices": {
+    "FABCEA8B-7EC8-2594-4879-2B3B63989660": {
+      "name": "Vivosun THB-1 ",
+      "adv_decoder": "ThermoBeacon2_ADV",
+      "gatt_decoder": "",
+      "bridge_profile": ""
+    }
+  },
+  "bridge_profiles": {},
+  "refresh_interval": 2.0,
+  "stale_timeout": 15.0,
+  "ui_refresh_interval": 1.0,
+  "temperature_unit": "C",
+  "temperature_offset": 0.0,
+  "humidity_offset": 0.0,
+  "leaf_offset": 0.0
+}
