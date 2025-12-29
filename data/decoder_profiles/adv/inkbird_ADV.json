@@ -1,26 +1,20 @@
 {
-  "name": "SPS ADV Profile",
+  "name": "SPS ANDROID ADV (MATCH FIX)",
   "vendor": "Inkbird",
   "model": "SPS",
 
-  "company_id": 25,
+  "company_id": 0,
   "mac_len": 0,
   "skip_after_mac": 0,
 
   "endian": "le",
 
-  "scale_temperature": 235.0,
-  "scale_humidity": 1.0,
-
-  "H_i_bytes": 1,
+  "scale_temperature": 100.0,
+  "scale_humidity": 100.0,
 
   "fields": {
     "T_i": 0,
-    "H_i": 4,
-
-    "T_e": 100,
-    "H_e": 100,
-
+    "H_i": 2,
     "packet": 6
   }
 }

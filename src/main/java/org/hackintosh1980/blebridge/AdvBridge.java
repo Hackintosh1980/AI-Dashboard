@@ -153,8 +153,18 @@ public class AdvBridge {
                     SparseArray<byte[]> md = rec.getManufacturerSpecificData();
                     if (md != null && md.size() > 0) {
                         for (int i = 0; i < md.size(); i++) {
-                            raw = toHex(md.valueAt(i));
-                            if (raw != null) break;
+                            int companyId = md.keyAt(i);
+                            byte[] payload = md.valueAt(i);
+                            if (payload == null || payload.length == 0) continue;
+                    
+                            // Rebuild Desktop-like RAW: CompanyID (LE) + payload
+                            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                            bos.write(companyId & 0xFF);
+                            bos.write((companyId >> 8) & 0xFF);
+                            bos.write(payload);
+                    
+                            raw = toHex(bos.toByteArray());
+                            break;
                         }
                     }
 
@@ -170,7 +180,6 @@ public class AdvBridge {
                     }
 
                     // 3) Fallback: komplette ADV bytes
-                    if (raw == null) raw = toHex(rec.getBytes());
                     if (raw == null) return;
 
                     synchronized (lock) {
