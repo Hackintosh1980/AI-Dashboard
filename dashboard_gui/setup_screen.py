@@ -27,6 +27,7 @@ class SetupScreen(Screen):
 
     def __init__(self, **kw):
         super().__init__(**kw)
+        self._devices_loaded_once = False   # 🔒 nur einmal
 
         # -------------------------------------------
         # Registrierung beim Global State Manager
@@ -60,7 +61,10 @@ class SetupScreen(Screen):
         )
         root.add_widget(self.panel)
 
-        Clock.schedule_once(self.update_devices, 0.3)
+    def on_pre_enter(self, *_):
+        if not self._devices_loaded_once:
+            self._devices_loaded_once = True
+            Clock.schedule_once(self.update_devices, 0)
 
     def _restart_adv(self, *_):
         try:

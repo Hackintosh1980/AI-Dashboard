@@ -59,8 +59,7 @@ class VPDScatterScreen(Screen):
         self.header = HeaderBar(
             goto_setup=lambda *_: setattr(sm, "current", "setup") if sm else None,
             goto_debug=lambda *_: setattr(sm, "current", "debug") if sm else None,
-            goto_device_picker=lambda *_: setattr(sm, "current", "device_picker") if sm else None,
-        )
+            goto_device_picker=lambda *_: setattr(self.manager, "current", "device_picker"),        )
         self.main.add_widget(self.header)
 
         self.header.enable_back("dashboard")
@@ -125,7 +124,7 @@ class VPDScatterScreen(Screen):
             halign="left",
             valign="middle",
             markup=True,
-            font_size=sp_scaled(18),
+            font_size=sp_scaled(20),
         )
         
         # 🔑 Auto-Höhe nach Text
@@ -135,10 +134,13 @@ class VPDScatterScreen(Screen):
         )
         
         with self.value_label.canvas.before:
-            Color(0, 0, 0, 0.65)
-            self._value_bg = RoundedRectangle(radius=[dp_scaled(12)])
-            Color(0.6, 0.6, 0.6, 0.5)
-            self._value_border = RoundedRectangle(radius=[dp_scaled(12)], width=1.2)
+            # Hintergrund – deutlich transparenter
+            Color(0.05, 0.05, 0.05, 0.45)
+            self._value_bg = RoundedRectangle(radius=[dp_scaled(14)])
+        
+            # Border – sehr subtil, fast HUD-like
+            Color(0.8, 0.8, 0.8, 0.18)
+            self._value_border = RoundedRectangle(radius=[dp_scaled(14)], width=1.0)
         
         self.value_label.bind(pos=self._sync_value_box, size=self._sync_value_box)
         
@@ -166,10 +168,10 @@ class VPDScatterScreen(Screen):
         # GRAPH (NUR KOORDINATEN!)
         # -------------------------------------------------
         self.graph = Graph(
-            xmin=0,    # °C
-            xmax=40,
-            ymin=20,    # %
-            ymax=100,
+            xmin=20,   # Humidity %
+            xmax=100,
+            ymin=0,    # Temperatur °C
+            ymax=40,
             draw_border=False,
             background_color=(0, 0, 0, 0),
             tick_color=(0, 0, 0, 0),
@@ -251,7 +253,8 @@ class VPDScatterScreen(Screen):
         # Scatter-relevante Offsets (nur hier!)
         t_off    = float(config.get_temperature_offset() or 0.0)
         leaf_off = float(config.get_leaf_offset() or 0.0)
-    
+        self._leaf_offset = leaf_off   # ✅ FIX
+
         data = BUFFER.get()
         if not data or not isinstance(data, list):
             return
@@ -265,7 +268,8 @@ class VPDScatterScreen(Screen):
             return
     
         ch = self.gsm.get_active_channel()
-        buf_key = f"{device_id}_{ch}"
+        prefix = f"{device_id}_{ch}"
+
     
         dashboard = self.manager.get_screen("dashboard")
         tiles = dashboard.content.tile_map
@@ -282,11 +286,10 @@ class VPDScatterScreen(Screen):
             self.p_ex.pos = (-1000, -1000)
             return
     
-        vpd_in = tile_vpd_in.buffers.get(buf_key, [])
-        vpd_ex = tile_vpd_ex.buffers.get(buf_key, [])
-        h_in   = tile_h_in.buffers.get(buf_key, []) if tile_h_in else []
-        h_ex   = tile_h_ex.buffers.get(buf_key, []) if tile_h_ex else []
-    
+        vpd_in = tile_vpd_in.buffers.get(f"{prefix}_vpd_in", [])
+        vpd_ex = tile_vpd_ex.buffers.get(f"{prefix}_vpd_ex", [])
+        h_in   = tile_h_in.buffers.get(f"{prefix}_hum_in", []) if tile_h_in else []
+        h_ex   = tile_h_ex.buffers.get(f"{prefix}_hum_ex", []) if tile_h_ex else []
         # -------------------------
         # IN (Scatter)
         # -------------------------
@@ -332,20 +335,20 @@ class VPDScatterScreen(Screen):
     
         self._box = {
             "in": {
-                "t": self._last_float(tile_t_in.buffers.get(buf_key)) if tile_t_in else None,
-                "h": self._last_float(tile_h_in.buffers.get(buf_key)) if tile_h_in else None,
+                "t": self._last_float(tile_t_in.buffers.get(f"{prefix}_temp_in")) if tile_t_in else None,
+                "h": self._last_float(tile_h_in.buffers.get(f"{prefix}_hum_in")) if tile_h_in else None,
                 "vpd": self._last_float(vpd_in),
             },
             "ex": {
-                "t": self._last_float(tile_t_ex.buffers.get(buf_key)) if tile_t_ex else None,
-                "h": self._last_float(tile_h_ex.buffers.get(buf_key)) if tile_h_ex else None,
+                "t": self._last_float(tile_t_ex.buffers.get(f"{prefix}_temp_ex")) if tile_t_ex else None,
+                "h": self._last_float(tile_h_ex.buffers.get(f"{prefix}_hum_ex")) if tile_h_ex else None,
                 "vpd": self._last_float(vpd_ex),
             },
         }
     
         self._update_value_box()
     # -------------------------------------------------
-    def _place_point(self, ellipse, x_val, y_val):
+    def _place_point(self, ellipse, temp, hum):
         gx, gy = self.graph.pos
         gw, gh = self.graph.size
     
@@ -353,15 +356,14 @@ class VPDScatterScreen(Screen):
         yr = max(self.graph.ymax - self.graph.ymin, 0.0001)
     
         # clamp
-        xv = min(max(x_val, self.graph.xmin), self.graph.xmax)
-        yv = min(max(y_val, self.graph.ymin), self.graph.ymax)
+        hum = min(max(hum, self.graph.xmin), self.graph.xmax)
+        temp = min(max(temp, self.graph.ymin), self.graph.ymax)
     
-        # X: größer = weiter rechts
-        x = gx + (xv - self.graph.xmin) / xr * gw
+        # X = Humidity → rechts
+        x = gx + (hum - self.graph.xmin) / xr * gw
     
-        # Y: größer = weiter nach OBEN  ✅ (invertiert!)
-        y = gy + (yv - self.graph.ymin) / yr * gh
-
+        # Y = Temperatur → oben heiß, unten kalt (invertiert)
+        y = gy + (1.0 - (temp - self.graph.ymin) / yr) * gh
     
         ellipse.pos = (
             x - ellipse.size[0] / 2,
@@ -389,15 +391,22 @@ class VPDScatterScreen(Screen):
             return
     
         self.value_label.text = (
-            "[color=#FFD933]■[/color] [b]IN[/b]\n"
+            "[font=FA][color=#FFD933]\uf111[/color][/font] [b]IN[/b]\n"
+
+
             f"  T: {fmt(b['in']['t'], ut)}   "
             f"H: {fmt(b['in']['h'], uh)}\n"
             f"  VPD: {fmt(b['in']['vpd'], ' kPa')}\n\n"
-    
-            "[color=#4DFF4D]■[/color] [b]EX[/b]\n"
+        
+            "[font=FA][color=#4DFF4D]\uf111[/color][/font] [b]EX[/b]\n"
+
             f"  T: {fmt(b['ex']['t'], ut)}   "
             f"H: {fmt(b['ex']['h'], uh)}\n"
-            f"  VPD: {fmt(b['ex']['vpd'], ' kPa')}"
+            f"  VPD: {fmt(b['ex']['vpd'], ' kPa')}\n\n"
+        
+            "[color=#AAAAAA][i]Leaf Offset:[/i][/color] "
+            f"{fmt(getattr(self, '_leaf_offset', None), '°C')}"
+
         )
     # -------------------------------------------------
     # RESET

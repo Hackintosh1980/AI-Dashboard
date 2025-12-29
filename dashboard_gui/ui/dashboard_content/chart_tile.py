@@ -122,61 +122,36 @@ class ChartTile(ButtonBehavior, BoxLayout):
     # -------------------------------------------------
     # UPDATE
     # -------------------------------------------------
-    def update(self, value):
+    def update(self, value, buf_key, render=False):
         if value is None:
-            self.reset()
             return
+    
         # -------------------------------------------------
-        # UNIT SWITCH DETECT → RESCALE BUFFER
+        # UNIT SWITCH DETECT → RESCALE ALL BUFFERS (wie vorher)
         # -------------------------------------------------
         if self.unit != self._last_unit:
             if self._last_unit == "°C" and self.unit == "°F":
                 # °C → °F
-                for k, buf in self.buffers.items():
-                    self.buffers[k] = [(v * 9 / 5) + 32 for v in buf]
+                for k, b in self.buffers.items():
+                    self.buffers[k] = [(v * 9 / 5) + 32 for v in b]
             elif self._last_unit == "°F" and self.unit == "°C":
                 # °F → °C
-                for k, buf in self.buffers.items():
-                    self.buffers[k] = [(v - 32) * 5 / 9 for v in buf]
-        
-            self._last_unit = self.unit    
-        # --- DEVICE + CHANNEL ERMITTELN ---
-        from dashboard_gui.global_state_manager import GLOBAL_STATE
-        from dashboard_gui.data_buffer import BUFFER
+                for k, b in self.buffers.items():
+                    self.buffers[k] = [(v - 32) * 5 / 9 for v in b]
+            self._last_unit = self.unit
     
-        data = BUFFER.get()
-        if not data:
-            return
-    
-        active = GLOBAL_STATE.active_index
-        if active >= len(data):
-            return
-    
-        device_id = data[active].get("device_id")
-        if device_id is None:
-            return
-    
-        # Aktiver Kanal: "adv" oder "gatt"
-        active_channel = GLOBAL_STATE.get_active_channel()
-    
-        # Multi-Channel Buffer Key
-        buf_key = f"{device_id}_{active_channel}"
-    
-        # Buffer initialisieren
+        # -------------------------------------------------
+        # BUFFER KEY
+        # -------------------------------------------------
         if buf_key not in self.buffers:
             self.buffers[buf_key] = []
-    
         buf = self.buffers[buf_key]
     
-        # --- VALUE PARSEN (KANONISCH) ---
+        # --- VALUE PARSEN ---
         try:
             v = float(value)
         except:
             return
-        
-        # ❗ WICHTIG:
-        # value MUSS immer in base_unit geliefert werden
-        # (z. B. °C, nicht °F)
     
         # --- Glättung ---
         if len(buf) == 0:
@@ -185,32 +160,30 @@ class ChartTile(ButtonBehavior, BoxLayout):
             smoothed = (buf[-1] * (1 - self.smoothing)) + (v * self.smoothing)
     
         # --- Trend ---
-        if len(buf) > 1:
+        if render and len(buf) > 1:
             diff = smoothed - buf[-1]
             if diff > 0.01:
-                self.lbl_trend.text = "\uf062"   # up
+                self.lbl_trend.text = "\uf062"
             elif diff < -0.01:
-                self.lbl_trend.text = "\uf063"   # down
+                self.lbl_trend.text = "\uf063"
             else:
-                self.lbl_trend.text = "\uf061"   # right
-            self.lbl_trend.color = (0.7, 0.7, 0.7, 1)
+                self.lbl_trend.text = "\uf061"
     
-        # --- Aktueller Wert ---
+        # --- Anzeige-Wert ---
         display_value = smoothed
-        
-        # Einheit nur fürs Anzeigen konvertieren
         if self.base_unit == "°C" and self.unit == "°F":
             display_value = (smoothed * 9 / 5) + 32
-        
-        self.lbl_value.text = f"{display_value:.2f} {self.unit}"    
-        # --- Write to buffer ---
+    
+        # --- Buffer ---
         buf.append(smoothed)
         if len(buf) > self.window:
             buf.pop(0)
-    
-        # --- Graph update ---
-        self._render_buffer(buf)
         
+        if render:
+            self.lbl_value.text = f"{display_value:.2f} {self.unit}"
+            self._render_buffer(buf)
+
+      
     def _render_buffer(self, buf):
         pts = [(i, val) for i, val in enumerate(buf)]
         self.plot.points = pts

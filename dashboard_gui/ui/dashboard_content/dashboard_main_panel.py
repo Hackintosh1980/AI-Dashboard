@@ -70,6 +70,12 @@ class DashboardMainPanel(GridLayout):
             "hum_ex":  self.tile_hum_ex,
             "vpd_ex":  self.tile_vpd_ex,
         }
+        # ---------------------------------------------------
+        # SWIPE STATE (ADD ONLY)
+        # ---------------------------------------------------
+        self._touch_start_x = None
+        self._touch_active = False
+        self._swipe_threshold = dp_scaled(60)
 
         # Anfang: alles anzeigen
         for tile in self.tile_map.values():
@@ -79,102 +85,115 @@ class DashboardMainPanel(GridLayout):
     # UPDATE – PURE MODE (decoded = Quelle, 1:1 übernehmen)
     # ============================================================
     def update_from_data(self, d):
-        """
-        Pure Multi-Channel Mode.
-        Dashboard zieht Werte NUR aus dem gewählten Kanal:
-            stream = d[d["channel"]]   # "adv" oder "gatt"
-        """
-    
-        # -------------------------------------------------
-        # 0) DEFAULT: ALLES AUS
-        # -------------------------------------------------
-        # WICHTIG:
-        # Bei leerem / offline / ungültigem Frame
-        # dürfen KEINE alten Tiles stehen bleiben
-        self._apply_tile_visibility([])
-    
         if not isinstance(d, dict):
             return
     
-        # -------------------------------------------------
-        # 1) Aktiven Kanal holen
-        # -------------------------------------------------
-        ch_name = d.get("channel")
-        if ch_name not in ("adv", "gatt"):
+        from dashboard_gui.data_buffer import BUFFER
+        from dashboard_gui.global_state_manager import GLOBAL_STATE
+    
+        data = BUFFER.get()
+        if not data:
             return
+        
+        active_channel = GLOBAL_STATE.get_active_channel()
+        
+        active_idx = GLOBAL_STATE.active_index
+        active_device_id = (
+            data[active_idx].get("device_id")
+            if active_idx < len(data) else None
+        )
     
-        stream = d.get(ch_name)
-        if not isinstance(stream, dict):
-            return
+        active_channel = GLOBAL_STATE.get_active_channel()
     
-        # optional: explizit offline abfangen
-        if not stream.get("alive", False):
-            return
+        # Sichtbarkeit NUR fürs aktive Gerät
+        self._apply_tile_visibility([])
     
-        internal = stream.get("internal", {})
-        external = stream.get("external", {})
-        vpd_int = stream.get("vpd_internal", {})
-        vpd_ext = stream.get("vpd_external", {})
+        active_idx = GLOBAL_STATE.active_index
+        if active_idx < len(data):
+            frame = data[active_idx]
+            stream = frame.get(active_channel, {})
+            internal = stream.get("internal", {})
+            external = stream.get("external", {})
+            vpd_int = stream.get("vpd_internal", {})
+            vpd_ext = stream.get("vpd_external", {})
     
-        active = []
+            active = []
+            if internal.get("temperature", {}).get("value") is not None:
+                active.append("temp_in")
+            if internal.get("humidity", {}).get("value") is not None:
+                active.append("hum_in")
+            if vpd_int.get("value") is not None:
+                active.append("vpd_in")
+            if external.get("present"):
+                if external.get("temperature", {}).get("value") is not None:
+                    active.append("temp_ex")
+                if external.get("humidity", {}).get("value") is not None:
+                    active.append("hum_ex")
+                if vpd_ext.get("value") is not None:
+                    active.append("vpd_ex")
     
-        # -------------------------------------------------
-        # INTERNAL
-        # -------------------------------------------------
-        if internal.get("temperature", {}).get("value") is not None:
-            active.append("temp_in")
+            self._apply_tile_visibility(active)
     
-        if internal.get("humidity", {}).get("value") is not None:
-            active.append("hum_in")
+        # 🔥 BUFFER FÜR ALLE GERÄTE
+        for frame in data:
+            device_id = frame.get("device_id")
+            if not device_id:
+                continue
     
-        if vpd_int.get("value") is not None:
-            active.append("vpd_in")
+            stream = frame.get(active_channel)
+            if not stream or not stream.get("alive"):
+                continue
     
-        # -------------------------------------------------
-        # EXTERNAL
-        # -------------------------------------------------
-        if external.get("present"):
-            if external.get("temperature", {}).get("value") is not None:
-                active.append("temp_ex")
+            prefix = f"{device_id}_{active_channel}"
     
-            if external.get("humidity", {}).get("value") is not None:
-                active.append("hum_ex")
+            internal = stream.get("internal", {})
+            external = stream.get("external", {})
+            vpd_int = stream.get("vpd_internal", {})
+            vpd_ext = stream.get("vpd_external", {})
     
-            if vpd_ext.get("value") is not None:
-                active.append("vpd_ex")
-    
-        # -------------------------------------------------
-        # Sichtbarkeit anwenden (JETZT bewusst)
-        # -------------------------------------------------
-        self._apply_tile_visibility(active)
-    
-        # -------------------------------------------------
-        # INTERNAL
-        # -------------------------------------------------
-        if "temp_in" in active:
-            t = internal["temperature"]
-            self.tile_temp_in.unit = t["unit"]
-            self.tile_temp_in.update(t["value"])
-    
-        if "hum_in" in active:
-            self.tile_hum_in.update(internal["humidity"]["value"])
-    
-        if "vpd_in" in active:
-            self.tile_vpd_in.update(vpd_int["value"])
-    
-        # -------------------------------------------------
-        # EXTERNAL
-        # -------------------------------------------------
-        if "temp_ex" in active:
-            t = external["temperature"]
-            self.tile_temp_ex.unit = t["unit"]
-            self.tile_temp_ex.update(t["value"])
-    
-        if "hum_ex" in active:
-            self.tile_hum_ex.update(external["humidity"]["value"])
-    
-        if "vpd_ex" in active:
-            self.tile_vpd_ex.update(vpd_ext["value"])
+            if internal.get("temperature", {}).get("value") is not None:
+                self.tile_temp_in.unit = internal["temperature"].get("unit", self.tile_temp_in.unit)
+                self.tile_temp_in.update(
+                    internal["temperature"]["value"],
+                    f"{prefix}_temp_in",
+                    render=(device_id == active_device_id)
+                )
+            
+            if internal.get("humidity", {}).get("value") is not None:
+                self.tile_hum_in.update(
+                    internal["humidity"]["value"],
+                    f"{prefix}_hum_in",
+                    render=(device_id == active_device_id)
+                )
+            
+            if vpd_int.get("value") is not None:
+                self.tile_vpd_in.update(
+                    vpd_int["value"],
+                    f"{prefix}_vpd_in",
+                    render=(device_id == active_device_id)
+                )
+            
+            if external.get("present") and external.get("temperature", {}).get("value") is not None:
+                self.tile_temp_ex.unit = external["temperature"].get("unit", self.tile_temp_ex.unit)
+                self.tile_temp_ex.update(
+                    external["temperature"]["value"],
+                    f"{prefix}_temp_ex",
+                    render=(device_id == active_device_id)
+                )
+            
+                if external.get("humidity", {}).get("value") is not None:
+                    self.tile_hum_ex.update(
+                        external["humidity"]["value"],
+                        f"{prefix}_hum_ex",
+                        render=(device_id == active_device_id)
+                    )
+            
+                if vpd_ext.get("value") is not None:
+                    self.tile_vpd_ex.update(
+                        vpd_ext["value"],
+                        f"{prefix}_vpd_ex",
+                        render=(device_id == active_device_id)
+                    )
 
     def _update_bg(self, *args):
         self.bg_rect.pos = self.pos
@@ -194,3 +213,56 @@ class DashboardMainPanel(GridLayout):
         for key in order:
             if key in active_keys:
                 self.add_widget(self.tile_map[key])
+    # ============================================================
+    # DEVICE SWIPE (HORIZONTAL)
+    # ============================================================
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            self._touch_start_x = touch.x
+            self._touch_active = True
+        return super().on_touch_down(touch)
+
+    def on_touch_move(self, touch):
+        if not self._touch_active or self._touch_start_x is None:
+            return super().on_touch_move(touch)
+
+        dx = touch.x - self._touch_start_x
+
+        if abs(dx) >= self._swipe_threshold:
+            from dashboard_gui.global_state_manager import GLOBAL_STATE
+            touch.grab(self)
+
+            if dx < 0:
+                self._next_device()
+            else:
+                self._prev_device()
+
+            self._touch_active = False
+            self._touch_start_x = None
+            touch.ungrab(self)
+            return True
+
+        return super().on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+        if touch.grab_current is self:
+            touch.ungrab(self)
+            return True
+
+        self._touch_active = False
+        self._touch_start_x = None
+        return super().on_touch_up(touch)
+
+    def _next_device(self):
+        from dashboard_gui.global_state_manager import GLOBAL_STATE
+        lst = GLOBAL_STATE.get_device_list()
+        if not lst:
+            return
+        GLOBAL_STATE.set_active_index((GLOBAL_STATE.active_index + 1) % len(lst))
+
+    def _prev_device(self):
+        from dashboard_gui.global_state_manager import GLOBAL_STATE
+        lst = GLOBAL_STATE.get_device_list()
+        if not lst:
+            return
+        GLOBAL_STATE.set_active_index((GLOBAL_STATE.active_index - 1) % len(lst))

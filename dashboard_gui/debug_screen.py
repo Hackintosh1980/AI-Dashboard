@@ -66,7 +66,7 @@ class DebugScreen(Screen):
         self.header = HeaderBar(
             goto_setup=lambda *_: setattr(self.manager, "current", "setup"),
             goto_debug=lambda *_: None,
-            goto_device_picker=None
+            goto_device_picker=lambda *_: setattr(self.manager, "current", "device_picker"),
         )
         self.header.enable_back("dashboard")
         root.add_widget(self.header)

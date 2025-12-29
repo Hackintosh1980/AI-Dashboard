@@ -29,6 +29,7 @@ class GlobalStateManager:
         self.debug_ref = None
         self.csv_viewer_ref = None
         self.cam_viewer_ref = None
+        self.device_picker_ref = None
 
         # Aktives Gerät (Index)
         self.active_index = 0
@@ -141,6 +142,8 @@ class GlobalStateManager:
         self.csv_viewer_ref = scr
     def attach_cam_viewer(self, scr):
         self.cam_viewer_ref = scr        
+    def attach_device_picker(self, scr):
+        self.device_picker_ref = scr
     # ---------------------------------------------------------
     # LED Helpers
     # ---------------------------------------------------------
@@ -163,6 +166,8 @@ class GlobalStateManager:
             self.csv_viewer_ref.header.set_led(self.led_state)            
         if self.cam_viewer_ref:
             self.cam_viewer_ref.header.set_led(self.led_state)            
+        if self.device_picker_ref:
+            self.device_picker_ref.header.set_led(self.led_state)
     def _led_offline(self):
         self.led_state = {"alive": False, "status": "offline"}
         self._push_led()
@@ -330,6 +335,9 @@ class GlobalStateManager:
             self.csv_viewer_ref.update_from_global(out)
         if self.cam_viewer_ref:
             self.cam_viewer_ref.update_from_global(out)            
+        if self.device_picker_ref:
+            self.device_picker_ref.update_from_global(out)
+
     # ---------------------------------------------------------
     # Active Keys – MULTI-CHANNEL (adv + gatt, ohne Vorrang)
     # ---------------------------------------------------------

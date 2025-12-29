@@ -244,11 +244,30 @@ class FullScreenView(Screen):
         if device_id is None:
             return
 
-        # Multi-Channel Key wie im ChartTile
+        # Multi-Channel + Metric Key (Lösung 1)
         active_channel = GLOBAL_STATE.get_active_channel()
-        buf_key = f"{device_id}_{active_channel}"
-
+        prefix = f"{device_id}_{active_channel}"
+        buf_key = f"{prefix}_{self.tile_id}"
+        # Unit immer aus dem aktiven Stream ziehen (sonst driftet es bei multi-device)
+        try:
+            active_frame = data[active]
+            stream = active_frame.get(active_channel, {}) or {}
+            internal = stream.get("internal", {}) or {}
+            external = stream.get("external", {}) or {}
+        
+            if self.tile_id == "temp_in":
+                u = internal.get("temperature", {}).get("unit")
+                if u:
+                    self._active_unit = u
+        
+            elif self.tile_id == "temp_ex":
+                u = external.get("temperature", {}).get("unit")
+                if u:
+                    self._active_unit = u
+        except:
+            pass
         buf = self.tile_ref.buffers.get(buf_key, [])
+
         # Fullscreen darf mehr Historie sehen
         if len(buf) > FULLSCREEN_MAX:
             buf = buf[-FULLSCREEN_MAX:]

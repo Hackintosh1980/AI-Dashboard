@@ -121,28 +121,51 @@ class ExternalIcon(BoxLayout):
             self.text_label.color = (0.7, 0.7, 0.7, 1)
 
 # -------------------------------------------------------
-# LED Circle
+# LED Circle – MODERN UI (NO LOGIC CHANGE)
 # -------------------------------------------------------
 class LEDCircle(Widget):
     def __init__(self, **kw):
         super().__init__(**kw)
-        size = dp_scaled(20)
-        with self.canvas:
-            self.color = Color(0, 1, 0, 1)
-            self.circle = Ellipse(pos=self.pos, size=(size, size))
-        self.bind(pos=self._u, size=self._u)
 
         self._pulse_event = None
         self._base_status = "offline"
 
+        with self.canvas:
+            # --- Outer Glow ---
+            self.glow_color = Color(0, 1, 0, 0.25)
+            self.glow = Ellipse()
+
+            # --- Ring ---
+            self.ring_color = Color(0, 1, 0, 0.9)
+            self.ring = Ellipse()
+
+            # --- Core ---
+            self.core_color = Color(0, 1, 0, 1)
+            self.core = Ellipse()
+
+        self.bind(pos=self._u, size=self._u)
+        self._u()
+
     def _u(self, *_):
         size = dp_scaled(20)
-        self.circle.size = (size, size)
-        self.circle.pos = (
-            self.x + (self.width - size) / 2,
-            self.y + (self.height - size) / 2
-        )
+        glow = size * 1.6
+        ring = size * 1.15
 
+        cx = self.x + self.width / 2
+        cy = self.y + self.height / 2
+
+        self.glow.size = (glow, glow)
+        self.glow.pos = (cx - glow / 2, cy - glow / 2)
+
+        self.ring.size = (ring, ring)
+        self.ring.pos = (cx - ring / 2, cy - ring / 2)
+
+        self.core.size = (size, size)
+        self.core.pos = (cx - size / 2, cy - size / 2)
+
+    # -------------------------------
+    # LOGIC – UNCHANGED
+    # -------------------------------
     def set_state(self, alive, status):
         base = "stale" if status == "flow" else status
         self._base_status = base
@@ -159,18 +182,29 @@ class LEDCircle(Widget):
 
     def _apply(self, s):
         if s in ("nodata", "stale"):
-            self.color.rgba = (1, 0.8, 0, 1); return
+            self._set_color(1, 0.8, 0); return
         if s == "error":
-            self.color.rgba = (1, 0, 0, 1); return
+            self._set_color(1, 0, 0); return
         if s == "offline":
-            self.color.rgba = (0.9, 0.1, 0.1, 1.0); return
-        self.color.rgba = (0.5, 0.5, 0.5, 1)
+            self._set_color(0.9, 0.1, 0.1); return
+
+        self._set_color(0.5, 0.5, 0.5)
+
+    def _set_color(self, r, g, b):
+        self.core_color.rgba = (r, g, b, 1)
+        self.ring_color.rgba = (r * 0.8, g * 0.8, b * 0.8, 0.9)
+        self.glow_color.rgba = (r, g, b, 0.25)
 
     def _pulse(self):
         if self._pulse_event:
             self._pulse_event.cancel()
-        self.color.rgba = (0.3, 1, 0.3, 1)
-        self._pulse_event = Clock.schedule_once(lambda *_: self._end(), 0.20)
+
+        self._set_color(0.3, 1, 0.3)
+        self.glow_color.a = 0.45
+
+        self._pulse_event = Clock.schedule_once(
+            lambda *_: self._end(), 0.20
+        )
 
     def _end(self, *_):
         self._pulse_event = None

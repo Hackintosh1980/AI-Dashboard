@@ -1,139 +1,236 @@
-# device_picker.py – Pretty Picker, Session 17/18 safe
+# dashboard_gui/device_picker.py
+# © 2025 Dominik Rosenthal (Hackintosh1980)
 
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
 from kivy.uix.label import Label
-from kivy.metrics import dp
+from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
-from kivy.uix.behaviors import ButtonBehavior
-from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.textinput import TextInput
+from kivy.metrics import dp
 
+from dashboard_gui.ui.common.header_online import HeaderBar
+from dashboard_gui.ui.scaling_utils import dp_scaled, sp_scaled
 from dashboard_gui.global_state_manager import GLOBAL_STATE
-from dashboard_gui.data_buffer import BUFFER
-
-
-class PickerRow(ButtonBehavior, BoxLayout):
-    """
-    Schöner Einzel-Button mit Kachelhaptik.
-    """
-    def __init__(self, text, idx, callback, **kw):
-        super().__init__(**kw)
-        self.orientation = "horizontal"
-        self.size_hint_y = None
-        self.height = dp(48)
-        self.padding = [dp(14), 0]
-        self.idx = idx
-        self.callback = callback
-
-        self.label = Label(
-            text=text,
-            halign="left",
-            valign="middle",
-            size_hint=(1, 1)
-        )
-        self.add_widget(self.label)
-
-        with self.canvas.before:
-            from kivy.graphics import Color, RoundedRectangle
-            self._color = Color(0.18, 0.18, 0.18, 1)
-            self._bg = RoundedRectangle(radius=[dp(10)])
-
-        self.bind(pos=self._update_bg, size=self._update_bg)
-
-    def on_release(self):
-        self.callback(self.idx)
-
-    def on_press(self):
-        self._color.rgba = (0.28, 0.28, 0.28, 1)
-
-    def on_touch_up(self, touch):
-        super().on_touch_up(touch)
-        self._color.rgba = (0.18, 0.18, 0.18, 1)
-
-    def _update_bg(self, *_):
-        self._bg.pos = self.pos
-        self._bg.size = self.size
-
 
 
 class DevicePickerScreen(Screen):
+    name = "device_picker"
 
     def __init__(self, **kw):
         super().__init__(**kw)
+        GLOBAL_STATE.attach_device_picker(self)
 
-        root = BoxLayout(orientation="vertical", padding=dp(15), spacing=dp(12))
-        self.add_widget(root)
+        root = BoxLayout(orientation="vertical")
 
-        # HEADER – Mini-Leiste
-        header = BoxLayout(
-            orientation="horizontal",
-            size_hint=(1, None),
-            height=dp(45),
-            padding=[0, 0, 0, 0]
+        # -------------------------------------------------
+        # HEADER (identisch zu About)
+        # -------------------------------------------------
+        self.header = HeaderBar(
+            goto_setup=lambda *_: setattr(self.manager, "current", "setup"),
+            goto_debug=lambda *_: setattr(self.manager, "current", "debug"),
+            goto_device_picker=lambda *_: None,  # already here
+        )
+        self.header.lbl_title.text = "Devices"
+        self.header.update_back_button("device_picker")
+        root.add_widget(self.header)
+
+        # -------------------------------------------------
+        # BODY
+        # -------------------------------------------------
+        body = BoxLayout(
+            orientation="vertical",
+            padding=dp_scaled(16),
+            spacing=dp_scaled(10)
         )
 
-        lbl = Label(
-            text="Geräte-Auswahl",
-            font_size=dp(18),
-            bold=True
-        )
-        header.add_widget(lbl)
+        scroll = ScrollView()
+        body.add_widget(scroll)
 
-        root.add_widget(header)
-
-        # Scroll
-        scroll = ScrollView(size_hint=(1, 1))
-        root.add_widget(scroll)
-
-        # Innerer Container
         self.list_container = BoxLayout(
             orientation="vertical",
-            spacing=dp(8),
+            spacing=dp_scaled(10),
             size_hint_y=None
         )
-        self.list_container.bind(minimum_height=self.list_container.setter("height"))
+        self.list_container.bind(
+            minimum_height=self.list_container.setter("height")
+        )
         scroll.add_widget(self.list_container)
 
-        # Zurück-Button
-        self.btn_back = Button(
-            text="←  Zurück",
-            size_hint=(1, None),
-            height=dp(48)
-        )
-        self.btn_back.bind(on_release=lambda *_: self._go_back())
-        root.add_widget(self.btn_back)
+        root.add_widget(body)
+        self.add_widget(root)
 
-
+    # -------------------------------------------------
+    # Lifecycle
+    # -------------------------------------------------
     def on_pre_enter(self, *_):
-        self._rebuild_list()
+        self._build()
 
+    def update_from_global(self, d):
+        self.header.update_from_global(d)
 
-    def _rebuild_list(self):
+    # -------------------------------------------------
+    # UI Build
+    # -------------------------------------------------
+    def _build(self):
         self.list_container.clear_widgets()
 
-        BUFFER.soft_reload()
-        data = BUFFER.get()
+        import config
+        cfg = config._init()
+        devices = cfg.get("devices", {})
 
-        if not data or not isinstance(data, list):
+        if not devices:
+            self.list_container.add_widget(
+                Label(text="No devices configured")
+            )
             return
 
-        for i, dev in enumerate(data):
-            mac = dev.get("device_id_flat") or dev.get("device_id")
-
-            row = PickerRow(
-                text=f"{i+1}.  {mac}",
-                idx=i,
-                callback=self._pick
+        for mac, dev in devices.items():
+            self.list_container.add_widget(
+                self._device_row(mac, dev)
             )
-            self.list_container.add_widget(row)
+    # -------------------------------------------------
+    # Device Order – swap up / down (CONFIG ONLY)
+    # -------------------------------------------------
+    def _move_device(self, mac, direction):
+        import config
+
+        cfg = config._init()
+        devices = cfg.get("devices", {})
+
+        keys = list(devices.keys())
+        if mac not in keys:
+            return
+
+        idx = keys.index(mac)
+
+        if direction == "up" and idx > 0:
+            swap_idx = idx - 1
+        elif direction == "down" and idx < len(keys) - 1:
+            swap_idx = idx + 1
+        else:
+            return  # nichts zu tun
+
+        # tauschen
+        keys[idx], keys[swap_idx] = keys[swap_idx], keys[idx]
+
+        # neues ordered dict bauen
+        new_devices = {k: devices[k] for k in keys}
+        cfg["devices"] = new_devices
+
+        config.save(cfg)
+
+        # UI neu aufbauen
+        self._build()
+
+    # -------------------------------------------------
+    # Adapter für WindowPicker-Kompatibilität
+    # -------------------------------------------------
+    def open(self):
+        if self.manager:
+            self.manager.current = self.name
+
+    def _device_row(self, mac, dev):
+        box = BoxLayout(
+            orientation="vertical",
+            padding=[dp_scaled(12), dp_scaled(8)],
+            spacing=dp_scaled(6),
+            size_hint_y=None
+        )
+        box.bind(minimum_height=box.setter("height"))
+
+        # Background
+        with box.canvas.before:
+            from kivy.graphics import Color, RoundedRectangle
+            Color(0.18, 0.18, 0.22, 1)
+            rect = RoundedRectangle(radius=[dp_scaled(10)], pos=box.pos, size=box.size)
+
+        box.bind(
+            pos=lambda *_: setattr(rect, "pos", box.pos),
+            size=lambda *_: setattr(rect, "size", box.size)
+        )
+
+        # Name input
+        name_input = TextInput(
+            text=dev.get("name", ""),
+            hint_text="Device name",
+            multiline=False,
+            font_size=sp_scaled(18),
+            size_hint_y=None,
+            height=dp_scaled(42)
+        )
+
+        # MAC label
+        mac_lbl = Label(
+            text=mac,
+            font_size=sp_scaled(14),
+            color=(0.7, 0.7, 0.7, 1),
+            size_hint_y=None,
+            height=dp_scaled(18),
+            halign="left"
+        )
+        mac_lbl.bind(size=lambda *_: mac_lbl.texture_update())
+
+        # Order buttons
+        order_row = BoxLayout(
+            orientation="horizontal",
+            spacing=dp_scaled(8),
+            size_hint_y=None,
+            height=dp_scaled(36)
+        )
+
+        btn_up = Button(
+            text="[font=FA]\uf062[/font]",  # arrow-up
+            markup=True,
+            font_size=sp_scaled(18),
+            size_hint=(None, 1),
+            width=dp_scaled(44),
+            background_normal="",
+            background_down="",
+            background_color=(0.25, 0.25, 0.30, 1),
+        )
+        btn_up.bind(on_release=lambda *_: self._move_device(mac, "up"))
+        
+        btn_down = Button(
+            text="[font=FA]\uf063[/font]",  # arrow-down
+            markup=True,
+            font_size=sp_scaled(18),
+            size_hint=(None, 1),
+            width=dp_scaled(44),
+            background_normal="",
+            background_down="",
+            background_color=(0.25, 0.25, 0.30, 1),
+        )
+        btn_down.bind(on_release=lambda *_: self._move_device(mac, "down"))
+        order_row.add_widget(btn_up)
+        order_row.add_widget(btn_down)
+
+        # Save button
+        btn = Button(
+            text="[font=FA]\uf0c7[/font]  Save",  # floppy-disk
+            markup=True,
+            font_size=sp_scaled(16),
+            size_hint=(None, None),
+            size=(dp_scaled(140), dp_scaled(40)),
+            background_normal="",
+            background_down="",
+            background_color=(0.25, 0.35, 0.30, 1),
+        )
+
+        def save_name(*_):
+            import config
+            cfg = config._init()
+            cfg.setdefault("devices", {}).setdefault(mac, {})["name"] = name_input.text.strip()
+            config.save(cfg)
+
+        btn.bind(on_release=save_name)
+
+        box.add_widget(name_input)
+        box.add_widget(mac_lbl)
+        box.add_widget(order_row)
+        box.add_widget(btn)
 
 
-    def _pick(self, idx):
-        print(f"[PICKER] Selected device index {idx}")
-        GLOBAL_STATE.set_active_index(idx)
-        self._go_back()
-
-
-    def _go_back(self):
-        self.manager.current = "dashboard"
+        return box
+    def update_from_global(self, d):
+        self.header.update_from_global(d)

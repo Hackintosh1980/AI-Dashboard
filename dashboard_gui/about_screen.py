@@ -39,25 +39,26 @@ class AboutScreen(Screen):
         )
 
         body.add_widget(Label(
-            text="AI Dashboard",
+            text="AI Dashboard 1.24",
             font_size=sp_scaled(28),
             bold=True
         ))
 
-        body.add_widget(Label(
-            text="© 2025 Dominik Rosenthal (Hackintosh1980)",
-            font_size=sp_scaled(16),
-            color=(0.8, 0.8, 0.8, 1)
-        ))
+
 
         body.add_widget(Label(
             text=(
-                "Dedicated to curiosity, persistence\n"
-                "and the courage to follow systems\n"
-                "where they *want* to go —\n\n"
-                "not where they look simpler.\n\n"
-                "Some components must stay alive.\n"
-                "This project knows the difference."
+                "AI Dashboard 1.24\n\n"
+                "AI Dashboard is a cross-platform monitoring and analysis system\n"
+                "for Bluetooth Low Energy (BLE) sensors.\n\n"
+                "It unifies data from different manufacturers and protocols\n"
+                "(ADV, GATT, hybrid devices) into a single, consistent data model.\n\n"
+                "The system is designed around real-time signals, explicit control\n"
+                "and transparent configuration — no hidden automation.\n\n"
+                "AI Dashboard focuses on understanding devices as they behave,\n"
+                "not forcing them into simplified abstractions."
+                "Bluetooth is required to discover and read your sensors.\n"
+                "Please enable Bluetooth and grant the requested permissions to continue."
             ),
             font_size=sp_scaled(16),
             halign="left",
@@ -65,9 +66,9 @@ class AboutScreen(Screen):
         ))
 
         body.add_widget(Label(
-            text="— Session 57",
-            font_size=sp_scaled(14),
-            color=(0.6, 0.6, 0.6, 1)
+            text="© 2025 Dominik Rosenthal (Hackintosh1980)",
+            font_size=sp_scaled(16),
+            color=(0.8, 0.8, 0.8, 1)
         ))
 
         root.add_widget(body)
